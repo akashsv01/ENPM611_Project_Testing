@@ -46,16 +46,22 @@ def parse_args():
 
 
 # Parse feature to call from command line arguments
-args = parse_args()
-# Add arguments to config so that they can be accessed in other parts of the application
-config.overwrite_from_args(args)
-    
-# Run the feature specified in the --feature flag
-if args.feature == 1:
-    UserActivityAnalysis().run()
-elif args.feature == 2:
-    CompletionAnalysis().run()
-elif args.feature == 3:
-    TriageTimeAnalysis().run()
-else:
-    print('Need to specify which feature to run with --feature flag.')
+def main():
+    # Parse feature to call from command line arguments
+    args = parse_args()
+    config.overwrite_from_args(args)
+
+    # Run the feature specified in the --feature flag
+    if args.feature == 1:
+        UserActivityAnalysis().run()
+    elif args.feature == 2:
+        CompletionAnalysis().run()
+    elif args.feature == 3:
+        TriageTimeAnalysis().run()
+    else:
+        print('Need to specify which feature to run with --feature flag.')
+
+
+if __name__ == "__main__":
+    main()
+

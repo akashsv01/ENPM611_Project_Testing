@@ -1,0 +1,25 @@
+test_convert_to_typed_value_invalid_json_returns_string (tests.test_config.TestConfigModule.test_convert_to_typed_value_invalid_json_returns_string) ... ok
+test_convert_to_typed_value_parses_json_number (tests.test_config.TestConfigModule.test_convert_to_typed_value_parses_json_number) ... ok
+test_get_parameter_missing_with_default_used (tests.test_config.TestConfigModule.test_get_parameter_missing_with_default_used) ... ok
+test_get_parameter_missing_with_falsy_default_buggy_behavior (tests.test_config.TestConfigModule.test_get_parameter_missing_with_falsy_default_buggy_behavior)
+Document the known bug: falsy defaults (0, False, '') ... ok
+test_get_parameter_prefers_environment_variable (tests.test_config.TestConfigModule.test_get_parameter_prefers_environment_variable) ... ok
+test_get_parameter_reads_from_config_file (tests.test_config.TestConfigModule.test_get_parameter_reads_from_config_file)
+Critical fix: ... ok
+test_init_config_does_not_reload_when_already_initialized (tests.test_config.TestConfigModule.test_init_config_does_not_reload_when_already_initialized) ... ok
+test_overwrite_from_args_sets_parameters (tests.test_config.TestConfigModule.test_overwrite_from_args_sets_parameters) ... ok
+test_set_parameter_and_get_parameter_round_trip_non_string (tests.test_config.TestConfigModule.test_set_parameter_and_get_parameter_round_trip_non_string) ... ok
+test_feature1_runs_user_activity (tests.test_run.TestRunModule.test_feature1_runs_user_activity) ... ok
+test_feature2_runs_completion (tests.test_run.TestRunModule.test_feature2_runs_completion) ... ok
+test_feature3_runs_triage (tests.test_run.TestRunModule.test_feature3_runs_triage) ... ok
+test_invalid_feature_prints_error (tests.test_run.TestRunModule.test_invalid_feature_prints_error) ... ok
+test_parse_args (tests.test_run.TestRunModule.test_parse_args) ... ok
+test_parse_missing_required (tests.test_run.TestRunModule.test_parse_missing_required) ... usage: run.py [-h] --feature FEATURE [--user USER] [--label LABEL]
+              [--since SINCE]
+run.py: error: the following arguments are required: --feature/-f
+ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.008s
+
+OK
