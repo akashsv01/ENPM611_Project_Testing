@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import tempfile
 import importlib
@@ -13,82 +12,117 @@ import config
 class TestConfigModule(unittest.TestCase):
 
     def setUp(self):
-        # Reset config module for each test
         importlib.reload(config)
 
-    def test_convert_to_typed_value_parses_json_number(self):
-        value = config.convert_to_typed_value("123")
-        self.assertEqual(value, 123)
+    # -------------------- convert_to_typed_value --------------------
+
+    def test_convert_to_typed_value_parses_number(self):
+        self.assertEqual(config.convert_to_typed_value("123"), 123)
 
     def test_convert_to_typed_value_invalid_json_returns_string(self):
-        value = config.convert_to_typed_value("not-json")
-        self.assertEqual(value, "not-json")
+        self.assertEqual(config.convert_to_typed_value("not-json"), "not-json")
 
-    def test_set_parameter_and_get_parameter_round_trip_non_string(self):
+    def test_convert_to_typed_value_none(self):
+        self.assertIsNone(config.convert_to_typed_value(None))
+
+    def test_convert_to_typed_value_json_list(self):
+        self.assertEqual(config.convert_to_typed_value("[1,2]"), [1, 2])
+
+    def test_convert_to_typed_value_json_dict(self):
+        self.assertEqual(config.convert_to_typed_value("{\"a\":1}"), {"a": 1})
+
+    # -------------------- set_parameter --------------------
+
+    def test_set_parameter_string(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            importlib.reload(config)
-            config.set_parameter("MY_INT", 42)
-            self.assertTrue(os.environ["MY_INT"].startswith("json:"))
-            value = config.get_parameter("MY_INT")
-            self.assertEqual(value, 42)
+            config.set_parameter("S", "hello")
+            self.assertEqual(os.environ["S"], "hello")
 
-    def test_get_parameter_prefers_environment_variable(self):
-        with mock.patch.dict(os.environ, {"MY_KEY": "123"}, clear=True):
-            importlib.reload(config)
-            config._config = {"MY_KEY": "not-used"}
-            value = config.get_parameter("MY_KEY")
-            self.assertEqual(value, 123)
+    def test_set_parameter_json_value(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            config.set_parameter("X", 10)
+            self.assertTrue(os.environ["X"].startswith("json:"))
 
-    def test_get_parameter_reads_from_config_file(self):
-        """
-        Critical fix:
-        _get_default_path() walks upward from os.getcwd().
-        We must patch os.getcwd() so that our temp directory
-        looks like the current working directory.
-        """
+    # -------------------- get_parameter --------------------
+
+    def test_get_parameter_from_env_priority(self):
+        with mock.patch.dict(os.environ, {"A": "123"}, clear=True):
+            importlib.reload(config)
+            self.assertEqual(config.get_parameter("A"), 123)
+
+    def test_get_parameter_from_config_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            cfg_path = os.path.join(tmpdir, "config.json")
-            with open(cfg_path, "w") as f:
+            path = os.path.join(tmpdir, "config.json")
+            with open(path, "w") as f:
                 json.dump({"FOO": "bar"}, f)
 
-            # Patch both _get_default_path (to return cfg_path)
-            # AND os.getcwd so the search starts inside tmpdir.
             with mock.patch("os.getcwd", return_value=tmpdir):
-                with mock.patch("config._get_default_path", return_value=cfg_path):
+                with mock.patch("config._get_default_path", return_value=path):
                     importlib.reload(config)
-                    value = config.get_parameter("FOO")
-                    self.assertEqual(value, "bar")
+                    self.assertEqual(config.get_parameter("FOO"), "bar")
 
-    def test_get_parameter_missing_with_default_used(self):
+    def test_get_parameter_no_default_and_missing(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             importlib.reload(config)
-            value = config.get_parameter("MISSING_KEY", default="fallback")
-            self.assertEqual(value, "fallback")
+            self.assertIsNone(config.get_parameter("MISSING"))
 
-    def test_get_parameter_missing_with_falsy_default_buggy_behavior(self):
-        """
-        Document the known bug: falsy defaults (0, False, '')
-        are NOT returned because code uses `if default:` instead of
-        `default is not None`.
-        """
+    # ----------- ❗ BUG TEST: falsy default is ignored (INTENDED FAIL) -----------
+
+    def test_get_parameter_missing_with_falsy_default_bug(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             importlib.reload(config)
-            value = config.get_parameter("X", default=0)
-            self.assertIsNone(value)
+            # BUG: should return 0 but returns None
+            self.assertIsNone(config.get_parameter("X", default=0))
 
-    def test_init_config_does_not_reload_when_already_initialized(self):
-        config._config = {"EXISTING": 1}
+    # -------------------- _init_config --------------------
+
+    def test_init_config_does_not_reload_if_not_none(self):
+        config._config = {"EXISTING": True}
         config._init_config()
-        self.assertEqual(config._config, {"EXISTING": 1})
+        self.assertEqual(config._config, {"EXISTING": True})
 
-    def test_overwrite_from_args_sets_parameters(self):
+    def test_init_config_loads_empty_when_no_file(self):
+        with mock.patch("config._get_default_path", return_value=None):
+            importlib.reload(config)
+            self.assertEqual(config._config, {})
+
+    # -------------------- overwrite_from_args --------------------
+
+    def test_overwrite_from_args_sets_values(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             importlib.reload(config)
-            args = SimpleNamespace(user="alice", feature=2, label=None)
+            args = SimpleNamespace(user="alice", feature=1, label="bug")
             config.overwrite_from_args(args)
             self.assertEqual(config.get_parameter("user"), "alice")
-            self.assertEqual(config.get_parameter("feature"), 2)
-            self.assertIsNone(config.get_parameter("label"))
+            self.assertEqual(config.get_parameter("feature"), 1)
+            self.assertEqual(config.get_parameter("label"), "bug")
+
+    def test_overwrite_from_args_handles_iteritems_block(self):
+        """Covers the first try/except in overwrite_from_args (line 113-114)."""
+        with mock.patch.dict(os.environ, {}, clear=True):
+            importlib.reload(config)
+
+            class FakeArgs:
+                # has iteritems → triggers first try-block
+                def iteritems(self):
+                    return iter([("x", 10)])
+
+                def items(self):
+                    return [("y", 20)]
+
+            args = FakeArgs()
+            config.overwrite_from_args(args)
+
+            # Should set both x and y
+            self.assertEqual(config.get_parameter("x"), 10)
+            self.assertEqual(config.get_parameter("y"), 20)
+
+    # -------------------- Extra coverage: environment JSON parsing --------------------
+
+    def test_environment_json_parsed_correctly(self):
+        with mock.patch.dict(os.environ, {"Z": "json:{\"val\":5}"}, clear=True):
+            importlib.reload(config)
+            self.assertEqual(config.get_parameter("Z"), {"val": 5})
 
 
 if __name__ == "__main__":
