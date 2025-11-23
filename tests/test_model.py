@@ -162,6 +162,12 @@ class TestIssue(unittest.TestCase):
         issue = Issue(jobj)
         self.assertIsNone(issue.created_date)
         self.assertIsNone(issue.updated_date)
+    
+    def test_issue_with_missing_state_field(self):
+        """Test Issue without state field"""
+        jobj = {'creator': 'sdispater','title': 'Test Issue','number': '5678'} # state field is missing
+        issue = Issue(jobj)
+        self.assertIsNotNone(issue.state, "If state is None, then missing state field should default to a valid State value")
 
 
 if __name__ == '__main__':
