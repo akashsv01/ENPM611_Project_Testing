@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 import sys
 import os
+from datetime import timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -396,6 +397,109 @@ class TestCompletionAnalysis(unittest.TestCase):
         
         result = run(config_dict={"since": "2024-01-01"})
         self.assertIsNotNone(result)
+
+    def test_labels_function_returns_original_list_not_copy(self):
+        """
+        BUG: _labels() returns the original list reference, not a copy.
+        If issue.labels exists, it returns issue.labels directly.
+        This means modifications to the returned list affect the original issue.
+        Expected: Should return a copy to prevent mutation
+        Actual: Returns the same list object
+        """
+        issue = MagicMock()
+        original_labels = ["bug", "feature"]
+        issue.labels = original_labels
+        
+        result = _labels(issue)
+        result.append("new_label")  # Modify the returned list
+        
+        # BUG: This will PASS because _labels returns the same object
+        # Expected: original_labels should still be ["bug", "feature"]
+        # Actual: original_labels is now ["bug", "feature", "new_label"]
+        self.assertEqual(len(original_labels), 2)  # FAILS - actual is 3
+
+    @patch('completion_time_analysis.DataLoader')
+    @patch('completion_time_analysis.config.get_parameter')
+    def test_filter_issues_modifies_same_list_reference(self, mock_config, mock_loader):
+        """
+        BUG: _filter_issues creates new lists in each if block but doesn't
+        maintain consistent behavior. When no filters apply, it returns 
+        self.issues directly, but with filters it returns new lists.
+        This inconsistency can cause issues with list mutations.
+        """
+        issue1 = self.create_closed_issue(1)
+        issue2 = self.create_closed_issue(2)
+        
+        mock_loader.return_value.get_issues.return_value = [issue1, issue2]
+        mock_config.return_value = None  # No filters
+        
+        analysis = CompletionAnalysis()
+        filtered = analysis.filtered_issues
+        
+        # When no filters, filtered_issues should be a different object than issues
+        # Expected: filtered_issues is analysis.issues (same reference)
+        # Actual: The code returns items which starts as self.issues
+        self.assertIsNot(filtered, analysis.issues)  # FAILS - they are the same
+
+    @patch('completion_time_analysis.DataLoader')
+    @patch('completion_time_analysis.config.get_parameter')
+    def test_url_function_with_zero_issue_number(self, mock_config, mock_loader):
+        """
+        BUG: _url checks if issue.number >= 0, which means issue #0 is considered valid
+        and will generate a URL like "https://github.com/.../issues/0"
+        
+        Expected: Issue #0 should be treated as invalid (return None)
+        Actual: Returns a URL for issue #0
+        """
+        issue = MagicMock()
+        issue.url = None
+        issue.number = 0
+        
+        result = _url(issue)
+        
+        # BUG: This generates a URL for issue 0, which likely doesn't exist
+        # Expected: None (since issue #0 is not a valid GitHub issue number)
+        # Actual: "https://github.com/python-poetry/poetry/issues/0"
+        self.assertIsNone(result)  # FAILS - actually returns a URL
+
+    @patch('completion_time_analysis.DataLoader')
+    @patch('completion_time_analysis.config.get_parameter')
+    @patch('matplotlib.pyplot.show')
+    @patch('builtins.print')
+    def test_explode_creates_duplicate_rows_for_repeated_labels(self, mock_print, mock_show, mock_config, mock_loader):
+        """
+        BUG: If an issue has duplicate labels like ["bug", "bug", "bug"], 
+        explode() will create 3 separate rows for the same issue-label combination.
+        This artificially inflates the count for that label in statistics.
+        
+        Expected: Duplicate labels should be deduplicated before explode
+        Actual: Each duplicate label creates a separate row, inflating counts
+        """
+        issue1 = self.create_closed_issue(1)  # Same label 10 times
+        issue1.labels = ["bug"] * 10
+        issue2 = self.create_closed_issue(2)
+        issue2.labels = ["bug"]
+        
+        mock_loader.return_value.get_issues.return_value = [issue1, issue2]
+        mock_config.return_value = None
+        
+        analysis = CompletionAnalysis()
+        result = analysis._analyze_closed_issues([issue1, issue2])
+        
+        # After explode, there will be 11 rows with label "bug" 
+        # (10 from issue1 + 1 from issue2)
+        # This affects median calculation and label ranking
+        
+        # Expected: Only 2 issues with "bug" label (count should be 2)
+        # Actual: 11 rows after explode (count is 11)
+        completion_df = result["completion_df"]
+        # The original df has 2 rows, but after explode it becomes 11
+        
+        # Check the stats calculation
+        lbl_df = completion_df[["labels", "completion_time"]].explode("labels")
+        bug_count = len(lbl_df[lbl_df["labels"] == "bug"])
+        
+        self.assertEqual(bug_count, 2)  # FAILS - actual is 11
 
 
 if __name__ == '__main__':
