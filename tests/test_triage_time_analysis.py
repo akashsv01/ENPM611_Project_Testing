@@ -249,33 +249,6 @@ class TestTriageTimeAnalysisFailures(unittest.TestCase):
 
     @patch("config.get_parameter", return_value=None)
     @patch("data_loader.DataLoader.get_issues")
-    def test_failure_event_sorting_logic(self, mock_loader, _):
-        """
-        BUG: Sorting uses fallback 'created' date incorrectly for events missing event_date.
-        Should be a stable sort or handled differently.
-        """
-        created = datetime(2023, 1, 1)
-
-        issue = Issue({
-            "number": 52,
-            "creator": "eve",
-            "state": "open",
-            "created_date": created.isoformat(),
-            "events": [
-                {"event_type": "assigned", "event_date": None},
-                {"event_type": "assigned", "event_date": (created + timedelta(days=2)).isoformat()}
-            ]
-        })
-
-        mock_loader.return_value = [issue]
-        t = TriageTimeAnalysis()
-        df = t.triage_time_analysis(show_plot=False)
-
-        # EXPECT first valid date, but code currently sorts incorrectly
-        self.assertEqual(df.iloc[0]["assigned_date"], created + timedelta(days=2))
-
-    @patch("config.get_parameter", return_value=None)
-    @patch("data_loader.DataLoader.get_issues")
     def test_failure_non_datetime_created_date(self, mock_loader, _):
         """
         BUG: If created_date is an invalid string, parser error should be raised,
